@@ -1,0 +1,6 @@
+{
+  "name": "OdoSync — Odómetro Digital OBD-II & Audio",
+  "description": "Odómetro digital Bluetooth OBD-II con métricas en tiempo real, ajuste seguro de kilometraje, alertas de mantenimiento preventivo y reproducción de música inalámbrica al sistema del coche para iOS y Android.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
