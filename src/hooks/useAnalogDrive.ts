@@ -20,7 +20,6 @@ export function useAnalogDrive(
 ) {
   const [mode, setMode] = useState<DriveMode>('idle');
   const [gpsError, setGpsError] = useState<string | null>(null);
-  const [testTargetKmh, setTestTargetKmh] = useState<number>(0);
   const [speedStats, setSpeedStats] = useState<SpeedStats>(
     initialSpeedStats || {
       currentKmh: 0,
@@ -31,6 +30,7 @@ export function useAnalogDrive(
 
   const watchIdRef = useRef<number | null>(null);
   const lastPosRef = useRef<{ lat: number; lon: number; time: number } | null>(null);
+  const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
   const onDistanceRef = useRef(onDistanceDeltaKm);
   onDistanceRef.current = onDistanceDeltaKm;
 
@@ -48,26 +48,47 @@ export function useAnalogDrive(
     }));
   }, []);
 
+  const releaseWakeLock = useCallback(() => {
+    if (wakeLockRef.current) {
+      wakeLockRef.current.release().catch(() => {});
+      wakeLockRef.current = null;
+    }
+  }, []);
+
+  const requestWakeLock = useCallback(async () => {
+    try {
+      const nav = navigator as unknown as {
+        wakeLock?: { request: (type: 'screen') => Promise<{ release: () => Promise<void> }> };
+      };
+      if (nav.wakeLock) {
+        wakeLockRef.current = await nav.wakeLock.request('screen');
+      }
+    } catch {
+      // Ignore if wakeLock is unsupported or blocked
+    }
+  }, []);
+
   const stopTracking = useCallback(() => {
     if (watchIdRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
     lastPosRef.current = null;
+    releaseWakeLock();
     setMode('idle');
     setGpsError(null);
-    setTestTargetKmh(0);
     setSpeedStats((prev) => ({ ...prev, currentKmh: 0 }));
-  }, []);
+  }, [releaseWakeLock]);
 
   const startGPS = useCallback(() => {
     setGpsError(null);
     if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
-      setGpsError('Este dispositivo no tiene GPS disponible.');
+      setGpsError('Este teléfono no tiene GPS disponible en el navegador.');
       return;
     }
     stopTracking();
     setMode('gps');
+    requestWakeLock();
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
@@ -102,65 +123,36 @@ export function useAnalogDrive(
         setGpsError(
           err.code === 1
             ? 'Permiso de ubicación denegado. Activa el GPS para medir velocidad y kilómetros.'
-            : 'Esperando señal GPS estable...'
+            : 'Buscando señal GPS...'
         );
-        setMode('idle');
+        if (err.code === 1) {
+          releaseWakeLock();
+          setMode('idle');
+        }
       },
       { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
     );
-  }, [stopTracking, updateSpeedRecord]);
+  }, [releaseWakeLock, requestWakeLock, stopTracking, updateSpeedRecord]);
 
-  const startRoadTest = useCallback(() => {
-    stopTracking();
-    setGpsError(null);
-    setTestTargetKmh(40);
-    setMode('road_test');
-  }, [stopTracking]);
-
+  // Re-acquire WakeLock when returning to foreground while GPS is active
   useEffect(() => {
-    if (mode !== 'road_test') return;
-    let lastTick = performance.now();
-
-    const interval = window.setInterval(() => {
-      const now = performance.now();
-      const dtSec = Math.min((now - lastTick) / 1000, 0.5);
-      lastTick = now;
-
-      setSpeedStats((prev) => {
-        const nextKmh = Math.max(
-          0,
-          Math.min(240, prev.currentKmh + (testTargetKmh - prev.currentKmh) * 0.25)
-        );
-        const rounded = Math.round(nextKmh * 10) / 10;
-
-        const deltaKm = (nextKmh * dtSec) / 3600;
-        if (deltaKm > 0) {
-          onDistanceRef.current(deltaKm);
-        }
-
-        return {
-          currentKmh: rounded,
-          maxKmh: rounded > prev.maxKmh ? rounded : prev.maxKmh,
-          minMovingKmh:
-            rounded >= 1
-              ? prev.minMovingKmh === null
-                ? rounded
-                : Math.min(prev.minMovingKmh, rounded)
-              : prev.minMovingKmh,
-        };
-      });
-    }, 200);
-
-    return () => window.clearInterval(interval);
-  }, [mode, testTargetKmh]);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && mode === 'gps') {
+        requestWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [mode, requestWakeLock]);
 
   useEffect(() => {
     return () => {
       if (watchIdRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
+      releaseWakeLock();
     };
-  }, []);
+  }, [releaseWakeLock]);
 
   const resetMinMax = useCallback(() => {
     setSpeedStats((prev) => ({
@@ -182,10 +174,7 @@ export function useAnalogDrive(
     mode,
     gpsError,
     speedStats,
-    testTargetKmh,
-    setTestTargetKmh,
     startGPS,
-    startRoadTest,
     stopTracking,
     resetMinMax,
     restoreSpeedStats,

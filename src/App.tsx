@@ -21,6 +21,7 @@ import { OdometerEditModal } from './components/OdometerEditModal';
 import { VehicleProfileModal } from './components/VehicleProfileModal';
 import { useAnalogDrive } from './hooks/useAnalogDrive';
 import { useCarAudio } from './hooks/useCarAudio';
+import { useFloatingBubble } from './hooks/useFloatingBubble';
 import { useNightTheme } from './hooks/useNightTheme';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import type {
@@ -130,6 +131,13 @@ export default function App() {
 
   const drive = useAnalogDrive(handleDistanceDeltaKm);
   const audio = useCarAudio();
+  const bubble = useFloatingBubble({
+    speedKmh: drive.speedStats.currentKmh,
+    totalKm,
+    partialKm,
+    fuelPct,
+    isNightMode,
+  });
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.TOTAL_KM, JSON.stringify(totalKm));
@@ -413,12 +421,12 @@ export default function App() {
               speedStats={drive.speedStats}
               mode={drive.mode}
               isNightMode={isNightMode}
+              isBubbleActive={bubble.isBubbleActive}
+              bubbleError={bubble.bubbleError}
               gpsError={drive.gpsError}
-              testTargetKmh={drive.testTargetKmh}
-              onChangeTestTarget={drive.setTestTargetKmh}
               onStartGPS={drive.startGPS}
-              onStartRoadTest={drive.startRoadTest}
               onStopTracking={drive.stopTracking}
+              onToggleBubble={bubble.isBubbleActive ? bubble.closeBubble : bubble.openBubble}
               onResetPartial={() => setPartialKm(0)}
               onResetMinMax={drive.resetMinMax}
               onOpenEditTotal={() => setIsEditOdoOpen(true)}
@@ -565,6 +573,24 @@ export default function App() {
             className="flex-1 h-full cursor-default"
           />
         </div>
+      )}
+
+      {/* In-App Floating Digital Bubble when browsing other mobile tabs */}
+      {activeTab !== 'cluster' && (
+        <button
+          type="button"
+          onClick={() => setActiveTab('cluster')}
+          aria-label="Volver al velocímetro"
+          className="lg:hidden fixed bottom-5 right-4 z-40 h-20 w-20 rounded-full bg-[var(--bg-canvas)] border-2 border-[#3B82F6] shadow-2xl flex flex-col items-center justify-center cursor-pointer"
+        >
+          <span className="font-mono-tabular text-xl font-bold leading-none text-[var(--text-primary)]">
+            {Math.round(drive.speedStats.currentKmh)}
+          </span>
+          <span className="text-[9px] text-[var(--text-secondary)]">km/h</span>
+          <span className="font-mono-tabular text-[10px] font-semibold text-amber-400 mt-0.5">
+            {Math.round(totalKm)} km
+          </span>
+        </button>
       )}
 
       {/* Quiet Footer */}

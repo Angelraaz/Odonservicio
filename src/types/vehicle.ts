@@ -1,4 +1,4 @@
-export type DriveMode = 'idle' | 'gps' | 'road_test';
+export type DriveMode = 'idle' | 'gps';
 
 export type NavTab = 'cluster' | 'maintenance' | 'audio' | 'drive';
 
