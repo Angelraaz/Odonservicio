@@ -8,7 +8,15 @@ import {
   SlidersHorizontal,
   Square,
 } from 'lucide-react';
-import type { DriveMode, SpeedStats, VehicleProfile } from '../types/vehicle';
+import type {
+  DriveMode,
+  MaintenanceItem,
+  MaintenanceKind,
+  SpeedStats,
+  VehicleProfile,
+} from '../types/vehicle';
+import { BrandEmblem } from './BrandEmblems';
+import { TelltaleIcon } from './TelltaleIcons';
 
 interface AnalogClusterProps {
   vehicle: VehicleProfile;
@@ -21,6 +29,8 @@ interface AnalogClusterProps {
   isBubbleActive: boolean;
   bubbleError: string | null;
   gpsError: string | null;
+  dueMaintenance: MaintenanceItem[];
+  onClickTelltale: () => void;
   onStartGPS: () => void;
   onStopTracking: () => void;
   onToggleBubble: () => void;
@@ -38,6 +48,25 @@ function formatEs(val: number, decimals: number): string {
   });
 }
 
+function shortTelltaleLabel(kind: MaintenanceKind, title: string): string {
+  switch (kind) {
+    case 'aceite':
+      return 'Aceite';
+    case 'filtro_aceite':
+      return 'F. Aceite';
+    case 'bujias':
+      return 'Bujías';
+    case 'correa_alternador':
+      return 'Correa';
+    case 'cauchos':
+      return 'Cauchos';
+    case 'filtro_gasolina':
+      return 'Gasolina';
+    default:
+      return title.slice(0, 10);
+  }
+}
+
 export const AnalogCluster: React.FC<AnalogClusterProps> = ({
   vehicle,
   totalKm,
@@ -49,6 +78,8 @@ export const AnalogCluster: React.FC<AnalogClusterProps> = ({
   isBubbleActive,
   bubbleError,
   gpsError,
+  dueMaintenance,
+  onClickTelltale,
   onStartGPS,
   onStopTracking,
   onToggleBubble,
@@ -226,9 +257,40 @@ export const AnalogCluster: React.FC<AnalogClusterProps> = ({
                 <circle cx="140" cy="140" r="12" fill={needleColor} />
               </g>
             </svg>
+
+            {/* Automotive Telltale Warning Lamps inside the bottom arc of the dial */}
+            {dueMaintenance.length > 0 && (
+              <button
+                type="button"
+                onClick={onClickTelltale}
+                title="Testigo encendido: toca para ver en Pulso Mecánico"
+                aria-label="Testigos de mantenimiento encendidos en el tablero"
+                className="absolute bottom-[7%] left-1/2 -translate-x-1/2 flex items-center justify-center gap-2 px-2.5 py-1 rounded-xl bg-black/80 border border-white/10 hover:border-amber-400/50 cursor-pointer"
+              >
+                {dueMaintenance.slice(0, 4).map((item) => {
+                  const isOverdue =
+                    item.lastServiceKm !== null &&
+                    item.lastServiceKm + item.intervalKm - totalKm <= 0;
+                  return (
+                    <span
+                      key={item.id}
+                      className={`flex flex-col items-center ${
+                        isOverdue ? 'text-red-500 animate-pulse' : 'text-amber-400'
+                      }`}
+                    >
+                      <TelltaleIcon kind={item.kind} className="w-5 h-5" />
+                      <span className="text-[8px] font-semibold leading-none tracking-tight">
+                        {shortTelltaleLabel(item.kind, item.title)}
+                      </span>
+                    </span>
+                  );
+                })}
+              </button>
+            )}
           </div>
 
           <div className="text-xs text-[var(--text-secondary)] -mt-1 flex items-center gap-2">
+            <BrandEmblem brand={vehicle.brand} className="w-6 h-4 shrink-0" />
             {mode === 'gps' ? (
               <span className="flex items-center gap-1.5 text-emerald-400">
                 <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -381,9 +443,13 @@ export const AnalogCluster: React.FC<AnalogClusterProps> = ({
               </div>
             </div>
 
-            {isLowFuel && (
+            {isLowFuel ? (
               <div className="text-xs font-medium text-red-400">
                 Reserva baja · Toca llenar gasolina
+              </div>
+            ) : (
+              <div className="text-[11px] font-mono-tabular text-[var(--text-secondary)]">
+                Baja al rodar · {vehicle.kmPerLiter} km/L · ~{Math.round(vehicle.tankCapacityLiters * vehicle.kmPerLiter)} km/tanque
               </div>
             )}
           </div>

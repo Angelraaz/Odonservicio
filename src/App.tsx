@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   CarFront,
+  FolderSync,
   Gauge,
-  HardDrive,
   Menu,
   Moon,
   Music2,
@@ -14,36 +14,43 @@ import {
 } from 'lucide-react';
 import { AnalogCluster } from './components/AnalogCluster';
 import { BluetoothAudioPlayer } from './components/BluetoothAudioPlayer';
-import { GoogleDriveBackupPanel } from './components/GoogleDriveBackupPanel';
+import { BrandEmblem, StartupSplash } from './components/BrandEmblems';
+import { DataSyncPanel } from './components/DataSyncPanel';
+import { InstallGateModal } from './components/InstallGateModal';
 import { MaintenancePanel } from './components/MaintenancePanel';
 import { MobileAppStoreCard } from './components/MobileAppStoreCard';
 import { OdometerEditModal } from './components/OdometerEditModal';
 import { VehicleProfileModal } from './components/VehicleProfileModal';
+import { getBrandDefinition, isValidBrandId } from './data/vehicleCatalog';
 import { useAnalogDrive } from './hooks/useAnalogDrive';
 import { useCarAudio } from './hooks/useCarAudio';
 import { useFloatingBubble } from './hooks/useFloatingBubble';
 import { useNightTheme } from './hooks/useNightTheme';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
+import { usePWAInstall } from './hooks/usePWAInstall';
 import type {
-  CarBackupPayload,
   MaintenanceItem,
   NavTab,
   OdometerAuditEntry,
+  OdoSyncBackupFile,
   VehicleProfile,
+  WorkshopNote,
 } from './types/vehicle';
 
 const STORAGE_KEYS = {
-  TOTAL_KM: 'festiva93_total_km_v3',
-  PARTIAL_KM: 'festiva93_partial_km_v3',
-  FUEL_PCT: 'festiva93_fuel_pct_v3',
-  VEHICLE: 'festiva93_vehicle_v3',
-  AUDIT: 'festiva93_audit_v3',
-  MAINTENANCE: 'festiva93_maintenance_v3',
-  SOUND_ALERTS: 'festiva93_sound_alerts_v3',
-  EMAIL: 'festiva93_email_v3',
+  TOTAL_KM: 'festiva93_total_km_v4',
+  PARTIAL_KM: 'festiva93_partial_km_v4',
+  FUEL_PCT: 'festiva93_fuel_pct_v4',
+  VEHICLE: 'festiva93_vehicle_v4',
+  AUDIT: 'festiva93_audit_v4',
+  MAINTENANCE: 'festiva93_maintenance_v4',
+  NOTES: 'festiva93_notes_v4',
+  SOUND_ALERTS: 'festiva93_sound_alerts_v4',
 };
 
 const DEFAULT_VEHICLE: VehicleProfile = {
+  vehicleType: 'car',
+  brand: 'ford',
   name: 'Ford Festiva',
   plate: '',
   year: 1993,
@@ -56,8 +63,20 @@ const DEFAULT_VEHICLE: VehicleProfile = {
 const DEFAULT_MAINTENANCE: MaintenanceItem[] = [
   {
     id: 'm-aceite',
-    title: 'Cambio de Aceite',
+    title: 'Estado del Aceite',
     kind: 'aceite',
+    intervalKm: 5000,
+    lastServiceKm: null,
+    lastServiceDate: '',
+    warnBeforeKm: 500,
+    enabled: true,
+    notes: '',
+    oilCondition: 'sin_revisar',
+  },
+  {
+    id: 'm-filtro-aceite',
+    title: 'Filtro de Aceite',
+    kind: 'filtro_aceite',
     intervalKm: 5000,
     lastServiceKm: null,
     lastServiceDate: '',
@@ -76,6 +95,41 @@ const DEFAULT_MAINTENANCE: MaintenanceItem[] = [
     enabled: true,
     notes: '',
   },
+  {
+    id: 'm-bujias',
+    title: 'Cambio de Bujías',
+    kind: 'bujias',
+    intervalKm: 20000,
+    lastServiceKm: null,
+    lastServiceDate: '',
+    warnBeforeKm: 1000,
+    enabled: true,
+    notes: '',
+    sparkPlugBrand: '',
+    sparkPlugCount: null,
+  },
+  {
+    id: 'm-correa',
+    title: 'Correa de Alternador',
+    kind: 'correa_alternador',
+    intervalKm: 30000,
+    lastServiceKm: null,
+    lastServiceDate: '',
+    warnBeforeKm: 1500,
+    enabled: true,
+    notes: '',
+  },
+  {
+    id: 'm-cauchos',
+    title: 'Cauchos',
+    kind: 'cauchos',
+    intervalKm: 40000,
+    lastServiceKm: null,
+    lastServiceDate: '',
+    warnBeforeKm: 2000,
+    enabled: true,
+    notes: '',
+  },
 ];
 
 function loadJson<T>(key: string, fallback: T): T {
@@ -90,24 +144,32 @@ function loadJson<T>(key: string, fallback: T): T {
 export default function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('cluster');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
 
   const [totalKm, setTotalKm] = useState<number>(() => loadJson(STORAGE_KEYS.TOTAL_KM, 0));
   const [partialKm, setPartialKm] = useState<number>(() => loadJson(STORAGE_KEYS.PARTIAL_KM, 0));
   const [fuelPct, setFuelPct] = useState<number>(() => loadJson(STORAGE_KEYS.FUEL_PCT, 100));
-  const [vehicle, setVehicle] = useState<VehicleProfile>(() =>
-    loadJson(STORAGE_KEYS.VEHICLE, DEFAULT_VEHICLE)
-  );
+  const [vehicle, setVehicle] = useState<VehicleProfile>(() => {
+    const loaded = loadJson(STORAGE_KEYS.VEHICLE, DEFAULT_VEHICLE);
+    const safeBrand = isValidBrandId(loaded.brand) ? loaded.brand : 'ford';
+    return {
+      ...DEFAULT_VEHICLE,
+      ...loaded,
+      brand: safeBrand,
+      vehicleType: loaded.vehicleType || getBrandDefinition(safeBrand).type,
+    };
+  });
   const [auditLog, setAuditLog] = useState<OdometerAuditEntry[]>(() =>
     loadJson(STORAGE_KEYS.AUDIT, [])
   );
   const [maintenance, setMaintenance] = useState<MaintenanceItem[]>(() =>
     loadJson(STORAGE_KEYS.MAINTENANCE, DEFAULT_MAINTENANCE)
   );
+  const [workshopNotes, setWorkshopNotes] = useState<WorkshopNote[]>(() =>
+    loadJson(STORAGE_KEYS.NOTES, [])
+  );
   const [soundAlertsEnabled, setSoundAlertsEnabled] = useState<boolean>(() =>
     loadJson(STORAGE_KEYS.SOUND_ALERTS, true)
-  );
-  const [userEmail, setUserEmail] = useState<string>(() =>
-    loadJson(STORAGE_KEYS.EMAIL, '')
   );
 
   const [isEditOdoOpen, setIsEditOdoOpen] = useState(false);
@@ -115,9 +177,16 @@ export default function App() {
   const alertedIdsRef = useRef<Set<string>>(new Set());
 
   const isOnline = useOnlineStatus();
+  const pwa = usePWAInstall();
   const { preference, setPreference, isNightMode } = useNightTheme();
   const vehicleRef = useRef(vehicle);
   vehicleRef.current = vehicle;
+
+  // Startup brand insignia splash screen
+  useEffect(() => {
+    const timer = window.setTimeout(() => setShowSplash(false), 1800);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const handleDistanceDeltaKm = useCallback((deltaKm: number) => {
     setTotalKm((prev) => Number((prev + deltaKm).toFixed(3)));
@@ -164,12 +233,12 @@ export default function App() {
   }, [maintenance]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SOUND_ALERTS, JSON.stringify(soundAlertsEnabled));
-  }, [soundAlertsEnabled]);
+    localStorage.setItem(STORAGE_KEYS.NOTES, JSON.stringify(workshopNotes));
+  }, [workshopNotes]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.EMAIL, JSON.stringify(userEmail));
-  }, [userEmail]);
+    localStorage.setItem(STORAGE_KEYS.SOUND_ALERTS, JSON.stringify(soundAlertsEnabled));
+  }, [soundAlertsEnabled]);
 
   const dueMaintenance = maintenance.filter((item) => {
     if (!item.enabled || item.lastServiceKm === null) return false;
@@ -231,6 +300,7 @@ export default function App() {
               ...item,
               lastServiceKm: Math.round(totalKm),
               lastServiceDate: today,
+              ...(item.kind === 'aceite' ? { oilCondition: 'optimo' } : {}),
             }
           : item
       )
@@ -238,18 +308,9 @@ export default function App() {
     alertedIdsRef.current.delete(id);
   };
 
-  const handleUpdateLastService = (
-    id: string,
-    km: number,
-    date: string,
-    intervalKm: number
-  ) => {
+  const handleUpdateItemDetails = (id: string, patch: Partial<MaintenanceItem>) => {
     setMaintenance((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? { ...item, lastServiceKm: km, lastServiceDate: date, intervalKm }
-          : item
-      )
+      prev.map((item) => (item.id === id ? { ...item, ...patch } : item))
     );
     alertedIdsRef.current.delete(id);
   };
@@ -268,35 +329,101 @@ export default function App() {
     setMaintenance((prev) => prev.filter((m) => m.id !== id));
   };
 
-  const buildBackupPayload = (email: string): CarBackupPayload => ({
-    version: 1,
-    savedAt: new Date().toISOString(),
-    email,
-    vehicle,
-    totalKm: Number(totalKm.toFixed(1)),
-    partialKm: Number(partialKm.toFixed(2)),
-    fuelPct: Number(fuelPct.toFixed(1)),
-    speedStats: drive.speedStats,
-    maintenance,
-    auditLog,
-  });
-
-  const handleRestoreBackup = (payload: CarBackupPayload) => {
-    if (typeof payload.totalKm === 'number') setTotalKm(payload.totalKm);
-    if (typeof payload.partialKm === 'number') setPartialKm(payload.partialKm);
-    if (typeof payload.fuelPct === 'number') setFuelPct(payload.fuelPct);
-    if (payload.vehicle) setVehicle(payload.vehicle);
-    if (Array.isArray(payload.maintenance)) setMaintenance(payload.maintenance);
-    if (Array.isArray(payload.auditLog)) setAuditLog(payload.auditLog);
-    if (payload.speedStats) drive.restoreSpeedStats(payload.speedStats);
-    if (payload.email) setUserEmail(payload.email);
+  const handleAddWorkshopNote = (text: string) => {
+    const entry: WorkshopNote = {
+      id: `note-${Date.now()}`,
+      date: new Date().toISOString().slice(0, 10),
+      km: totalKm,
+      text,
+    };
+    setWorkshopNotes((prev) => [entry, ...prev]);
   };
 
-  const navItems: { id: NavTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  const handleDeleteWorkshopNote = (id: string) => {
+    setWorkshopNotes((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  const buildBackup = useCallback((): OdoSyncBackupFile => {
+    return {
+      app: 'OdoSync',
+      version: 4,
+      exportedAt: new Date().toISOString(),
+      vehicle,
+      totalKm: Number(totalKm.toFixed(2)),
+      partialKm: Number(partialKm.toFixed(2)),
+      fuelPct: Number(fuelPct.toFixed(2)),
+      speedStats: drive.speedStats,
+      maintenance,
+      workshopNotes,
+      auditLog,
+      soundAlertsEnabled,
+    };
+  }, [
+    auditLog,
+    drive.speedStats,
+    fuelPct,
+    maintenance,
+    partialKm,
+    soundAlertsEnabled,
+    totalKm,
+    vehicle,
+    workshopNotes,
+  ]);
+
+  const handleImportBackup = useCallback(
+    (backup: OdoSyncBackupFile) => {
+      if (typeof backup.totalKm === 'number' && !Number.isNaN(backup.totalKm)) {
+        setTotalKm(Math.max(0, backup.totalKm));
+      }
+      if (typeof backup.partialKm === 'number' && !Number.isNaN(backup.partialKm)) {
+        setPartialKm(Math.max(0, backup.partialKm));
+      }
+      if (typeof backup.fuelPct === 'number' && !Number.isNaN(backup.fuelPct)) {
+        setFuelPct(Math.min(100, Math.max(0, backup.fuelPct)));
+      }
+      if (backup.vehicle && typeof backup.vehicle === 'object') {
+        setVehicle((prev) => {
+          const candidateBrand = backup.vehicle.brand || prev.brand || 'ford';
+          const safeBrand = isValidBrandId(candidateBrand) ? candidateBrand : 'ford';
+          return {
+            ...DEFAULT_VEHICLE,
+            ...prev,
+            ...backup.vehicle,
+            brand: safeBrand,
+            vehicleType:
+              backup.vehicle.vehicleType || getBrandDefinition(safeBrand).type,
+          };
+        });
+      }
+      if (Array.isArray(backup.maintenance) && backup.maintenance.length > 0) {
+        setMaintenance(backup.maintenance);
+      }
+      if (Array.isArray(backup.workshopNotes)) {
+        setWorkshopNotes(backup.workshopNotes);
+      }
+      if (Array.isArray(backup.auditLog)) {
+        setAuditLog(backup.auditLog);
+      }
+      if (backup.speedStats) {
+        drive.restoreSpeedStats(backup.speedStats);
+      }
+      if (typeof backup.soundAlertsEnabled === 'boolean') {
+        setSoundAlertsEnabled(backup.soundAlertsEnabled);
+      }
+      alertedIdsRef.current.clear();
+    },
+    [drive]
+  );
+
+  const navItems: {
+    id: NavTab;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }[] = [
     { id: 'cluster', label: 'Velocímetro', icon: Gauge },
-    { id: 'maintenance', label: 'Aceite y Filtro', icon: Wrench },
+    { id: 'pulso', label: 'Pulso Mecánico', icon: Wrench },
     { id: 'audio', label: 'Música', icon: Music2 },
-    { id: 'drive', label: 'Google Drive', icon: HardDrive },
+    { id: 'sync', label: 'Actualizar Info', icon: FolderSync },
   ];
 
   const selectMobileTab = (tab: NavTab) => {
@@ -317,8 +444,30 @@ export default function App() {
         ? 'Noche'
         : 'Día';
 
+  // Enforce standalone app installation on direct mobile browsers (no Chrome browsing),
+  // while keeping embedded preview frames and desktop browsers open for inspection.
+  const isPreviewFrame = typeof window !== 'undefined' && window.self !== window.top;
+  if (pwa.isMobileDevice && !pwa.isInstalled && !isPreviewFrame) {
+    return (
+      <InstallGateModal
+        vehicle={vehicle}
+        isIOS={pwa.isIOS}
+        isInstallable={pwa.isInstallable}
+        onInstall={pwa.install}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)] pb-10 transition-colors duration-300 flex flex-col">
+      {showSplash && (
+        <StartupSplash
+          vehicle={vehicle}
+          isNightMode={isNightMode}
+          onDismiss={() => setShowSplash(false)}
+        />
+      )}
+
       {/* Clean Top Bar with Signature Blue-Ringed Circular Menu Button */}
       <header className="sticky top-0 z-30 h-16 bg-[var(--bg-canvas)]/95 backdrop-blur-md transition-colors duration-300">
         <div className="max-w-7xl mx-auto h-full px-4 sm:px-6 flex items-center justify-between gap-4 sm:gap-8">
@@ -334,9 +483,10 @@ export default function App() {
             <button
               type="button"
               onClick={() => setActiveTab('cluster')}
-              className="hidden lg:inline-block font-display text-2xl font-bold tracking-tight text-[var(--text-primary)] whitespace-nowrap cursor-pointer"
+              className="hidden lg:flex items-center gap-2.5 font-display text-2xl font-bold tracking-tight text-[var(--text-primary)] whitespace-nowrap cursor-pointer"
             >
-              OdoSync
+              <BrandEmblem brand={vehicle.brand} className="w-9 h-6" />
+              <span>OdoSync</span>
             </button>
           </div>
 
@@ -388,7 +538,7 @@ export default function App() {
         {!isOnline && (
           <div className="rounded-xl bg-[var(--bg-elevated)] border border-white/10 px-4 py-2.5 flex items-center gap-2.5 text-xs text-[#D1D5DB]">
             <WifiOff className="w-4 h-4 shrink-0" />
-            <span>Sin conexión: el tablero y música local siguen funcionando.</span>
+            <span>Sin conexión: tablero, pulso mecánico y música local funcionan en tu celular.</span>
           </div>
         )}
 
@@ -397,21 +547,22 @@ export default function App() {
             <div className="flex items-center gap-2 text-xs text-red-200">
               <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
               <span>
-                Aviso: <strong>{dueMaintenance.map((d) => d.title).join(' y ')}</strong>
+                Testigo activo:{' '}
+                <strong>{dueMaintenance.map((d) => d.title).join(', ')}</strong>
               </span>
             </div>
             <button
               type="button"
-              onClick={() => setActiveTab('maintenance')}
+              onClick={() => setActiveTab('pulso')}
               className="text-xs font-semibold text-red-300 underline whitespace-nowrap cursor-pointer"
             >
-              Ver
+              Ver Pulso
             </button>
           </div>
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Left Column: Analog Gauge + 2x2 Readouts + Fuel */}
+          {/* Left Column: Analog Gauge + Telltale Lamps + 2x2 Readouts + Fuel */}
           <div className={`lg:col-span-6 ${activeTab === 'cluster' ? 'block' : 'hidden lg:block'}`}>
             <AnalogCluster
               vehicle={vehicle}
@@ -424,6 +575,8 @@ export default function App() {
               isBubbleActive={bubble.isBubbleActive}
               bubbleError={bubble.bubbleError}
               gpsError={drive.gpsError}
+              dueMaintenance={dueMaintenance}
+              onClickTelltale={() => setActiveTab('pulso')}
               onStartGPS={drive.startGPS}
               onStopTracking={drive.stopTracking}
               onToggleBubble={bubble.isBubbleActive ? bubble.closeBubble : bubble.openBubble}
@@ -435,18 +588,21 @@ export default function App() {
             />
           </div>
 
-          {/* Right Column: Oil & Filter, Music, Google Drive, App Install */}
+          {/* Right Column: Pulso Mecánico + Music */}
           <div className="lg:col-span-6 space-y-5">
-            <div className={activeTab === 'maintenance' ? 'block' : 'hidden lg:block'}>
+            <div className={activeTab === 'pulso' ? 'block' : 'hidden lg:block'}>
               <MaintenancePanel
                 currentKm={totalKm}
                 items={maintenance}
+                workshopNotes={workshopNotes}
                 soundAlertsEnabled={soundAlertsEnabled}
                 onToggleSoundAlerts={() => setSoundAlertsEnabled((s) => !s)}
                 onMarkDoneToday={handleMarkDoneToday}
-                onUpdateLastService={handleUpdateLastService}
+                onUpdateItemDetails={handleUpdateItemDetails}
                 onAddItem={handleAddMaintenance}
                 onDeleteItem={handleDeleteMaintenance}
+                onAddNote={handleAddWorkshopNote}
+                onDeleteNote={handleDeleteWorkshopNote}
               />
             </div>
 
@@ -477,23 +633,22 @@ export default function App() {
               />
             </div>
 
-            <div className={activeTab === 'drive' ? 'block' : 'hidden lg:block'}>
-              <GoogleDriveBackupPanel
-                userEmail={userEmail}
-                onChangeEmail={setUserEmail}
-                buildBackupPayload={buildBackupPayload}
-                onRestoreBackup={handleRestoreBackup}
+            <div className={activeTab === 'sync' ? 'block' : 'hidden lg:block'}>
+              <DataSyncPanel
+                totalKm={totalKm}
+                partialKm={partialKm}
+                fuelPct={fuelPct}
+                maintenanceCount={maintenance.length}
+                notesCount={workshopNotes.length}
+                buildBackup={buildBackup}
+                onImportBackup={handleImportBackup}
               />
-            </div>
-
-            <div className={activeTab === 'drive' ? 'block' : 'hidden lg:block'}>
-              <MobileAppStoreCard />
             </div>
           </div>
         </div>
       </main>
 
-      {/* Slide-out Mobile Navigation Drawer (from the blue circular ☰ button) */}
+      {/* Slide-out Mobile Navigation Drawer */}
       {menuOpen && (
         <div
           className="fixed inset-0 z-50 flex bg-black/75 backdrop-blur-sm lg:hidden"
@@ -501,10 +656,13 @@ export default function App() {
           aria-modal="true"
           aria-label="Menú principal"
         >
-          <div className="w-72 max-w-[85vw] h-full bg-[#0A0B0E] border-r border-white/[0.1] p-5 flex flex-col justify-between">
+          <div className="w-72 max-w-[85vw] h-full bg-[#0A0B0E] border-r border-white/[0.1] p-5 flex flex-col justify-between overflow-y-auto">
             <div className="space-y-6">
               <div className="flex items-center justify-between">
-                <span className="font-display text-2xl font-bold text-white">OdoSync</span>
+                <div className="flex items-center gap-2">
+                  <BrandEmblem brand={vehicle.brand} className="w-8 h-5" />
+                  <span className="font-display text-2xl font-bold text-white">OdoSync</span>
+                </div>
                 <button
                   type="button"
                   onClick={() => setMenuOpen(false)}

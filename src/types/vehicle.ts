@@ -1,8 +1,28 @@
 export type DriveMode = 'idle' | 'gps';
 
-export type NavTab = 'cluster' | 'maintenance' | 'audio' | 'drive';
+export type NavTab = 'cluster' | 'pulso' | 'audio' | 'sync';
+
+export type VehicleType = 'car' | 'moto';
+
+export type VehicleBrandId =
+  | 'ford'
+  | 'fiat'
+  | 'lada'
+  | 'chrysler'
+  | 'volkswagen'
+  | 'chevrolet'
+  | 'honda'
+  | 'yamaha'
+  | 'suzuki'
+  | 'kawasaki'
+  | 'bera'
+  | 'bajaj';
+
+export type CarBrandId = VehicleBrandId;
 
 export interface VehicleProfile {
+  vehicleType?: VehicleType;
+  brand: VehicleBrandId;
   name: string;
   plate: string;
   year: number;
@@ -26,16 +46,52 @@ export interface OdometerAuditEntry {
   reason: string;
 }
 
+export type MaintenanceKind =
+  | 'aceite'
+  | 'filtro_aceite'
+  | 'bujias'
+  | 'correa_alternador'
+  | 'cauchos'
+  | 'filtro_gasolina'
+  | 'otro';
+
+export type OilCondition = 'sin_revisar' | 'optimo' | 'medio' | 'oscuro' | 'bajo';
+
 export interface MaintenanceItem {
   id: string;
   title: string;
-  kind: 'aceite' | 'filtro_gasolina' | 'otro';
+  kind: MaintenanceKind;
   intervalKm: number;
   lastServiceKm: number | null;
   lastServiceDate: string;
   warnBeforeKm: number;
   enabled: boolean;
   notes: string;
+  oilCondition?: OilCondition;
+  sparkPlugBrand?: string;
+  sparkPlugCount?: number | null;
+}
+
+export interface WorkshopNote {
+  id: string;
+  date: string;
+  km: number;
+  text: string;
+}
+
+export interface OdoSyncBackupFile {
+  app?: string;
+  version: number;
+  exportedAt: string;
+  vehicle: Partial<VehicleProfile>;
+  totalKm: number;
+  partialKm: number;
+  fuelPct: number;
+  speedStats?: SpeedStats;
+  maintenance?: MaintenanceItem[];
+  workshopNotes?: WorkshopNote[];
+  auditLog?: OdometerAuditEntry[];
+  soundAlertsEnabled?: boolean;
 }
 
 export interface AudioTrack {
@@ -50,17 +106,4 @@ export interface AudioTrack {
 export interface AudioOutputDevice {
   deviceId: string;
   label: string;
-}
-
-export interface CarBackupPayload {
-  version: number;
-  savedAt: string;
-  email: string;
-  vehicle: VehicleProfile;
-  totalKm: number;
-  partialKm: number;
-  fuelPct: number;
-  speedStats: SpeedStats;
-  maintenance: MaintenanceItem[];
-  auditLog: OdometerAuditEntry[];
 }
