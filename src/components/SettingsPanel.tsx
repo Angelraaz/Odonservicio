@@ -261,7 +261,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
               Modo nocturno de conducción
             </h3>
             <p className="text-xs text-[#9CA3AF] mt-0.5">
-              Oscurece el fondo (#050505) automáticamente de 19:00 a 06:59 según la hora local.
+              Oscurece la pantalla automáticamente de 19:00 a 06:59 según la hora local.
             </p>
           </div>
           {isNightMode ? (
@@ -275,8 +275,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           {(
             [
               { id: 'auto', label: 'Automático' },
-              { id: 'day', label: 'Día (#000)' },
-              { id: 'night', label: 'Noche (#050505)' },
+              { id: 'day', label: 'Día' },
+              { id: 'night', label: 'Noche' },
             ] as const
           ).map((opt) => (
             <button

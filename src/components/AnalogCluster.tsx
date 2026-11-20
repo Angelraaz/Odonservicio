@@ -111,15 +111,15 @@ export const AnalogCluster: React.FC<AnalogClusterProps> = ({
         <div
           className={
             forceLandscape
-              ? 'col-span-5 flex flex-col items-center justify-start'
-              : 'landscape:col-span-5 lg:landscape:col-span-1 flex flex-col items-center justify-start'
+              ? 'col-span-6 flex flex-col items-center justify-start'
+              : 'landscape:col-span-6 lg:landscape:col-span-1 flex flex-col items-center justify-start'
           }
         >
           <div
             className={
               forceLandscape
-                ? 'relative w-56 h-56 sm:w-64 sm:h-64'
-                : 'relative w-72 h-72 sm:w-80 sm:h-80 landscape:w-56 landscape:h-56 lg:landscape:w-80 lg:landscape:h-80'
+                ? 'relative w-[272px] h-[272px] sm:w-72 sm:h-72'
+                : 'relative w-72 h-72 sm:w-80 sm:h-80 landscape:w-[272px] landscape:h-[272px] lg:landscape:w-80 lg:landscape:h-80'
             }
           >
             <svg viewBox="0 0 280 280" className="w-full h-full">
@@ -328,12 +328,12 @@ export const AnalogCluster: React.FC<AnalogClusterProps> = ({
           </div>
         </div>
 
-        {/* Right Column in Landscape / Below Dial in Portrait: Pure Readouts + Fuel + Sleek Iniciar Button */}
+        {/* Right Column in Landscape / Below Dial in Portrait */}
         <div
           className={
             forceLandscape
-              ? 'col-span-7 space-y-3 pt-1'
-              : 'landscape:col-span-7 lg:landscape:col-span-1 space-y-4 landscape:space-y-3 landscape:pt-1 lg:landscape:pt-0'
+              ? 'col-span-6 space-y-3 pt-1'
+              : 'landscape:col-span-6 lg:landscape:col-span-1 space-y-4 landscape:space-y-3 landscape:pt-1 lg:landscape:pt-0'
           }
         >
           {/* Clean 2x2 Readout Grid (only numbers, calibration moved to Configuración) */}
