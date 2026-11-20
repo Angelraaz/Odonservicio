@@ -1,6 +1,6 @@
 export type DriveMode = 'idle' | 'gps';
 
-export type NavTab = 'cluster' | 'pulso' | 'audio' | 'sync';
+export type NavTab = 'cluster' | 'pulso' | 'audio' | 'sync' | 'config';
 
 export type VehicleType = 'car' | 'moto';
 

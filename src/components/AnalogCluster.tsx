@@ -1,9 +1,7 @@
 import React from 'react';
 import {
   Fuel,
-  Minimize2,
   Navigation,
-  PictureInPicture2,
   RotateCcw,
   SlidersHorizontal,
   Square,
@@ -26,14 +24,12 @@ interface AnalogClusterProps {
   speedStats: SpeedStats;
   mode: DriveMode;
   isNightMode: boolean;
-  isBubbleActive: boolean;
-  bubbleError: string | null;
   gpsError: string | null;
+  forceLandscape: boolean;
   dueMaintenance: MaintenanceItem[];
   onClickTelltale: () => void;
   onStartGPS: () => void;
   onStopTracking: () => void;
-  onToggleBubble: () => void;
   onResetPartial: () => void;
   onResetMinMax: () => void;
   onOpenEditTotal: () => void;
@@ -75,14 +71,12 @@ export const AnalogCluster: React.FC<AnalogClusterProps> = ({
   speedStats,
   mode,
   isNightMode,
-  isBubbleActive,
-  bubbleError,
   gpsError,
+  forceLandscape,
   dueMaintenance,
   onClickTelltale,
   onStartGPS,
   onStopTracking,
-  onToggleBubble,
   onResetPartial,
   onResetMinMax,
   onOpenEditTotal,
@@ -122,10 +116,28 @@ export const AnalogCluster: React.FC<AnalogClusterProps> = ({
       className="bg-[var(--bg-canvas)] text-[var(--text-primary)] transition-colors duration-300"
     >
       {/* Responsive Vertical (Portrait) & Horizontal (Landscape) Smartphone Grid */}
-      <div className="grid grid-cols-1 landscape:grid-cols-12 lg:landscape:grid-cols-1 gap-5 landscape:gap-4 items-center">
+      <div
+        className={
+          forceLandscape
+            ? 'grid grid-cols-12 gap-4 items-center'
+            : 'grid grid-cols-1 landscape:grid-cols-12 lg:landscape:grid-cols-1 gap-5 landscape:gap-4 items-center'
+        }
+      >
         {/* Dial Column */}
-        <div className="landscape:col-span-5 lg:landscape:col-span-1 flex flex-col items-center justify-center pt-1">
-          <div className="relative w-72 h-72 sm:w-80 sm:h-80 landscape:w-56 landscape:h-56 lg:landscape:w-80 lg:landscape:h-80">
+        <div
+          className={
+            forceLandscape
+              ? 'col-span-5 flex flex-col items-center justify-center pt-1'
+              : 'landscape:col-span-5 lg:landscape:col-span-1 flex flex-col items-center justify-center pt-1'
+          }
+        >
+          <div
+            className={
+              forceLandscape
+                ? 'relative w-56 h-56 sm:w-64 sm:h-64'
+                : 'relative w-72 h-72 sm:w-80 sm:h-80 landscape:w-56 landscape:h-56 lg:landscape:w-80 lg:landscape:h-80'
+            }
+          >
             <svg viewBox="0 0 280 280" className="w-full h-full">
               {/* Outer subtle bezel ring */}
               <circle
@@ -306,7 +318,13 @@ export const AnalogCluster: React.FC<AnalogClusterProps> = ({
         </div>
 
         {/* Right Column in Landscape / Below Dial in Portrait */}
-        <div className="landscape:col-span-7 lg:landscape:col-span-1 space-y-4">
+        <div
+          className={
+            forceLandscape
+              ? 'col-span-7 space-y-3'
+              : 'landscape:col-span-7 lg:landscape:col-span-1 space-y-4'
+          }
+        >
           {/* 2x2 Readout Grid */}
           <div className="grid grid-cols-2 gap-y-4 gap-x-4 max-w-md mx-auto text-center">
             <div className="space-y-0.5">
@@ -454,9 +472,9 @@ export const AnalogCluster: React.FC<AnalogClusterProps> = ({
             )}
           </div>
 
-          {/* Real GPS + Floating Bubble Minimization Controls */}
+          {/* Real GPS Controls */}
           <div className="max-w-md mx-auto space-y-2.5">
-            <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex items-center gap-2.5">
               {mode === 'idle' ? (
                 <button
                   type="button"
@@ -476,29 +494,6 @@ export const AnalogCluster: React.FC<AnalogClusterProps> = ({
                   Detener GPS
                 </button>
               )}
-
-              <button
-                type="button"
-                onClick={onToggleBubble}
-                title="Convierte el contador en burbuja flotante para minimizar la app"
-                className={`min-h-[46px] px-4 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap transition-colors ${
-                  isBubbleActive
-                    ? 'bg-blue-600/20 border-blue-500 text-blue-300'
-                    : 'bg-[var(--bg-elevated)] hover:bg-[#1B1F27] border-white/10 text-[var(--text-primary)]'
-                }`}
-              >
-                {isBubbleActive ? (
-                  <>
-                    <Minimize2 className="w-4 h-4" />
-                    Cerrar burbuja
-                  </>
-                ) : (
-                  <>
-                    <PictureInPicture2 className="w-4 h-4 text-blue-400" />
-                    Burbuja flotante
-                  </>
-                )}
-              </button>
             </div>
 
             {gpsError && (
@@ -507,15 +502,6 @@ export const AnalogCluster: React.FC<AnalogClusterProps> = ({
                 className="rounded-xl bg-red-500/10 border border-red-500/25 px-3.5 py-2.5 text-xs text-red-300"
               >
                 {gpsError}
-              </div>
-            )}
-
-            {bubbleError && (
-              <div
-                role="status"
-                className="rounded-xl bg-blue-500/10 border border-blue-500/25 px-3.5 py-2.5 text-xs text-blue-200"
-              >
-                {bubbleError}
               </div>
             )}
           </div>

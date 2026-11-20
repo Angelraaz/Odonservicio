@@ -7,6 +7,7 @@ import {
   Menu,
   Moon,
   Music2,
+  Settings,
   Sun,
   WifiOff,
   Wrench,
@@ -20,14 +21,25 @@ import { InstallGateModal } from './components/InstallGateModal';
 import { MaintenancePanel } from './components/MaintenancePanel';
 import { MobileAppStoreCard } from './components/MobileAppStoreCard';
 import { OdometerEditModal } from './components/OdometerEditModal';
+import { SettingsPanel } from './components/SettingsPanel';
 import { VehicleProfileModal } from './components/VehicleProfileModal';
 import { getBrandDefinition, isValidBrandId } from './data/vehicleCatalog';
 import { useAnalogDrive } from './hooks/useAnalogDrive';
 import { useCarAudio } from './hooks/useCarAudio';
 import { useFloatingBubble } from './hooks/useFloatingBubble';
+import { useForceLandscape } from './hooks/useForceLandscape';
 import { useNightTheme } from './hooks/useNightTheme';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { usePWAInstall } from './hooks/usePWAInstall';
+import {
+  hasAnyLocalStorageData,
+  LEGACY_KEY_CHAINS,
+  loadVaultSnapshot,
+  loadWithMigration,
+  mergeMaintenanceLists,
+  requestPersistentBrowserStorage,
+  saveVaultSnapshot,
+} from './lib/persistentStore';
 import type {
   MaintenanceItem,
   NavTab,
@@ -38,14 +50,14 @@ import type {
 } from './types/vehicle';
 
 const STORAGE_KEYS = {
-  TOTAL_KM: 'festiva93_total_km_v4',
-  PARTIAL_KM: 'festiva93_partial_km_v4',
-  FUEL_PCT: 'festiva93_fuel_pct_v4',
-  VEHICLE: 'festiva93_vehicle_v4',
-  AUDIT: 'festiva93_audit_v4',
-  MAINTENANCE: 'festiva93_maintenance_v4',
-  NOTES: 'festiva93_notes_v4',
-  SOUND_ALERTS: 'festiva93_sound_alerts_v4',
+  TOTAL_KM: LEGACY_KEY_CHAINS.TOTAL_KM[0],
+  PARTIAL_KM: LEGACY_KEY_CHAINS.PARTIAL_KM[0],
+  FUEL_PCT: LEGACY_KEY_CHAINS.FUEL_PCT[0],
+  VEHICLE: LEGACY_KEY_CHAINS.VEHICLE[0],
+  AUDIT: LEGACY_KEY_CHAINS.AUDIT[0],
+  MAINTENANCE: LEGACY_KEY_CHAINS.MAINTENANCE[0],
+  NOTES: LEGACY_KEY_CHAINS.NOTES[0],
+  SOUND_ALERTS: LEGACY_KEY_CHAINS.SOUND_ALERTS[0],
 };
 
 const DEFAULT_VEHICLE: VehicleProfile = {
@@ -132,25 +144,22 @@ const DEFAULT_MAINTENANCE: MaintenanceItem[] = [
   },
 ];
 
-function loadJson<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
 export default function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('cluster');
   const [menuOpen, setMenuOpen] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
 
-  const [totalKm, setTotalKm] = useState<number>(() => loadJson(STORAGE_KEYS.TOTAL_KM, 0));
-  const [partialKm, setPartialKm] = useState<number>(() => loadJson(STORAGE_KEYS.PARTIAL_KM, 0));
-  const [fuelPct, setFuelPct] = useState<number>(() => loadJson(STORAGE_KEYS.FUEL_PCT, 100));
+  const [totalKm, setTotalKm] = useState<number>(() =>
+    loadWithMigration(LEGACY_KEY_CHAINS.TOTAL_KM, 0)
+  );
+  const [partialKm, setPartialKm] = useState<number>(() =>
+    loadWithMigration(LEGACY_KEY_CHAINS.PARTIAL_KM, 0)
+  );
+  const [fuelPct, setFuelPct] = useState<number>(() =>
+    loadWithMigration(LEGACY_KEY_CHAINS.FUEL_PCT, 100)
+  );
   const [vehicle, setVehicle] = useState<VehicleProfile>(() => {
-    const loaded = loadJson(STORAGE_KEYS.VEHICLE, DEFAULT_VEHICLE);
+    const loaded = loadWithMigration(LEGACY_KEY_CHAINS.VEHICLE, DEFAULT_VEHICLE);
     const safeBrand = isValidBrandId(loaded.brand) ? loaded.brand : 'ford';
     return {
       ...DEFAULT_VEHICLE,
@@ -160,24 +169,29 @@ export default function App() {
     };
   });
   const [auditLog, setAuditLog] = useState<OdometerAuditEntry[]>(() =>
-    loadJson(STORAGE_KEYS.AUDIT, [])
+    loadWithMigration(LEGACY_KEY_CHAINS.AUDIT, [])
   );
   const [maintenance, setMaintenance] = useState<MaintenanceItem[]>(() =>
-    loadJson(STORAGE_KEYS.MAINTENANCE, DEFAULT_MAINTENANCE)
+    mergeMaintenanceLists(
+      loadWithMigration(LEGACY_KEY_CHAINS.MAINTENANCE, DEFAULT_MAINTENANCE),
+      DEFAULT_MAINTENANCE
+    )
   );
   const [workshopNotes, setWorkshopNotes] = useState<WorkshopNote[]>(() =>
-    loadJson(STORAGE_KEYS.NOTES, [])
+    loadWithMigration(LEGACY_KEY_CHAINS.NOTES, [])
   );
   const [soundAlertsEnabled, setSoundAlertsEnabled] = useState<boolean>(() =>
-    loadJson(STORAGE_KEYS.SOUND_ALERTS, true)
+    loadWithMigration(LEGACY_KEY_CHAINS.SOUND_ALERTS, true)
   );
 
   const [isEditOdoOpen, setIsEditOdoOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const alertedIdsRef = useRef<Set<string>>(new Set());
+  const vaultReadyRef = useRef(false);
 
   const isOnline = useOnlineStatus();
   const pwa = usePWAInstall();
+  const { forceLandscape, needsCssRotation, toggleForceLandscape } = useForceLandscape();
   const { preference, setPreference, isNightMode } = useNightTheme();
   const vehicleRef = useRef(vehicle);
   vehicleRef.current = vehicle;
@@ -239,6 +253,75 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.SOUND_ALERTS, JSON.stringify(soundAlertsEnabled));
   }, [soundAlertsEnabled]);
+
+  // Request durable browser storage and auto-recover from IndexedDB vault if localStorage was wiped
+  useEffect(() => {
+    let active = true;
+    void requestPersistentBrowserStorage();
+
+    if (!hasAnyLocalStorageData()) {
+      loadVaultSnapshot().then((snapshot) => {
+        if (!active) return;
+        if (snapshot) {
+          if (typeof snapshot.totalKm === 'number') setTotalKm(snapshot.totalKm);
+          if (typeof snapshot.partialKm === 'number') setPartialKm(snapshot.partialKm);
+          if (typeof snapshot.fuelPct === 'number') setFuelPct(snapshot.fuelPct);
+          if (snapshot.vehicle) {
+            const safeBrand = isValidBrandId(snapshot.vehicle.brand)
+              ? snapshot.vehicle.brand
+              : 'ford';
+            setVehicle({
+              ...DEFAULT_VEHICLE,
+              ...snapshot.vehicle,
+              brand: safeBrand,
+              vehicleType:
+                snapshot.vehicle.vehicleType || getBrandDefinition(safeBrand).type,
+            });
+          }
+          if (Array.isArray(snapshot.auditLog)) setAuditLog(snapshot.auditLog);
+          if (Array.isArray(snapshot.maintenance)) {
+            setMaintenance(mergeMaintenanceLists(snapshot.maintenance, DEFAULT_MAINTENANCE));
+          }
+          if (Array.isArray(snapshot.workshopNotes)) setWorkshopNotes(snapshot.workshopNotes);
+          if (typeof snapshot.soundAlertsEnabled === 'boolean') {
+            setSoundAlertsEnabled(snapshot.soundAlertsEnabled);
+          }
+        }
+        vaultReadyRef.current = true;
+      });
+    } else {
+      vaultReadyRef.current = true;
+    }
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Mirror current state into IndexedDB vault after hydration
+  useEffect(() => {
+    if (!vaultReadyRef.current) return;
+    void saveVaultSnapshot({
+      totalKm,
+      partialKm,
+      fuelPct,
+      vehicle,
+      auditLog,
+      maintenance,
+      workshopNotes,
+      soundAlertsEnabled,
+      updatedAt: new Date().toISOString(),
+    });
+  }, [
+    totalKm,
+    partialKm,
+    fuelPct,
+    vehicle,
+    auditLog,
+    maintenance,
+    workshopNotes,
+    soundAlertsEnabled,
+  ]);
 
   const dueMaintenance = maintenance.filter((item) => {
     if (!item.enabled || item.lastServiceKm === null) return false;
@@ -396,7 +479,7 @@ export default function App() {
         });
       }
       if (Array.isArray(backup.maintenance) && backup.maintenance.length > 0) {
-        setMaintenance(backup.maintenance);
+        setMaintenance(mergeMaintenanceLists(backup.maintenance, DEFAULT_MAINTENANCE));
       }
       if (Array.isArray(backup.workshopNotes)) {
         setWorkshopNotes(backup.workshopNotes);
@@ -424,6 +507,7 @@ export default function App() {
     { id: 'pulso', label: 'Pulso Mecánico', icon: Wrench },
     { id: 'audio', label: 'Música', icon: Music2 },
     { id: 'sync', label: 'Actualizar Info', icon: FolderSync },
+    { id: 'config', label: 'Configuración', icon: Settings },
   ];
 
   const selectMobileTab = (tab: NavTab) => {
@@ -459,7 +543,13 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)] pb-10 transition-colors duration-300 flex flex-col">
+    <div
+      className={
+        needsCssRotation
+          ? 'fixed top-0 left-full w-[100dvh] h-[100dvw] origin-top-left rotate-90 overflow-y-auto overflow-x-hidden bg-[var(--bg-canvas)] text-[var(--text-primary)] pb-6 transition-colors duration-300 flex flex-col z-40'
+          : 'min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)] pb-10 transition-colors duration-300 flex flex-col'
+      }
+    >
       {showSplash && (
         <StartupSplash
           vehicle={vehicle}
@@ -572,14 +662,12 @@ export default function App() {
               speedStats={drive.speedStats}
               mode={drive.mode}
               isNightMode={isNightMode}
-              isBubbleActive={bubble.isBubbleActive}
-              bubbleError={bubble.bubbleError}
               gpsError={drive.gpsError}
+              forceLandscape={forceLandscape}
               dueMaintenance={dueMaintenance}
               onClickTelltale={() => setActiveTab('pulso')}
               onStartGPS={drive.startGPS}
               onStopTracking={drive.stopTracking}
-              onToggleBubble={bubble.isBubbleActive ? bubble.closeBubble : bubble.openBubble}
               onResetPartial={() => setPartialKm(0)}
               onResetMinMax={drive.resetMinMax}
               onOpenEditTotal={() => setIsEditOdoOpen(true)}
@@ -642,6 +730,19 @@ export default function App() {
                 notesCount={workshopNotes.length}
                 buildBackup={buildBackup}
                 onImportBackup={handleImportBackup}
+              />
+            </div>
+
+            <div className={activeTab === 'config' ? 'block' : 'hidden lg:block'}>
+              <SettingsPanel
+                forceLandscape={forceLandscape}
+                onToggleForceLandscape={toggleForceLandscape}
+                isBubbleActive={bubble.isBubbleActive}
+                bubbleError={bubble.bubbleError}
+                onToggleBubble={bubble.isBubbleActive ? bubble.closeBubble : bubble.openBubble}
+                themePreference={preference}
+                isNightMode={isNightMode}
+                onChangeThemePreference={setPreference}
               />
             </div>
           </div>
