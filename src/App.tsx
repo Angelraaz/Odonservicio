@@ -191,7 +191,16 @@ export default function App() {
 
   const isOnline = useOnlineStatus();
   const pwa = usePWAInstall();
-  const { forceLandscape, needsCssRotation, toggleForceLandscape } = useForceLandscape();
+  const {
+    forceLandscape,
+    manualLandscape,
+    autoTiltEnabled,
+    setAutoTiltEnabled,
+    needsCssRotation,
+    rotationDirection,
+    toggleForceLandscape,
+    requestSensorAccess,
+  } = useForceLandscape();
   const { preference, setPreference, isNightMode } = useNightTheme();
   const vehicleRef = useRef(vehicle);
   vehicleRef.current = vehicle;
@@ -528,6 +537,11 @@ export default function App() {
         ? 'Noche'
         : 'Día';
 
+  const handleStartDrive = useCallback(() => {
+    void requestSensorAccess();
+    drive.startGPS();
+  }, [drive, requestSensorAccess]);
+
   // Enforce standalone app installation on direct mobile browsers (no Chrome browsing),
   // while keeping embedded preview frames and desktop browsers open for inspection.
   const isPreviewFrame = typeof window !== 'undefined' && window.self !== window.top;
@@ -546,8 +560,10 @@ export default function App() {
     <div
       className={
         needsCssRotation
-          ? 'fixed top-0 left-full w-[100dvh] h-[100dvw] origin-top-left rotate-90 overflow-y-auto overflow-x-hidden bg-[var(--bg-canvas)] text-[var(--text-primary)] pb-6 transition-colors duration-300 flex flex-col z-40'
-          : 'min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)] pb-10 transition-colors duration-300 flex flex-col'
+          ? `fixed w-[100dvh] h-[100dvw] origin-top-left overflow-y-auto overflow-x-hidden bg-[var(--bg-canvas)] text-[var(--text-primary)] pb-3 transition-colors duration-300 flex flex-col z-40 ${
+              rotationDirection === 'cw' ? 'top-full left-0 -rotate-90' : 'top-0 left-full rotate-90'
+            }`
+          : 'min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)] pb-10 landscape:pb-3 transition-colors duration-300 flex flex-col'
       }
     >
       {showSplash && (
@@ -559,7 +575,11 @@ export default function App() {
       )}
 
       {/* Clean Top Bar with Signature Blue-Ringed Circular Menu Button */}
-      <header className="sticky top-0 z-30 h-16 bg-[var(--bg-canvas)]/95 backdrop-blur-md transition-colors duration-300">
+      <header
+        className={`sticky top-0 z-30 bg-[var(--bg-canvas)]/95 backdrop-blur-md transition-colors duration-300 ${
+          forceLandscape ? 'h-12' : 'h-14 landscape:h-12 lg:landscape:h-16'
+        }`}
+      >
         <div className="max-w-7xl mx-auto h-full px-4 sm:px-6 flex items-center justify-between gap-4 sm:gap-8">
           <div className="flex items-center gap-3 shrink-0">
             <button
@@ -624,7 +644,11 @@ export default function App() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 pt-2 space-y-5 flex-1">
+      <main
+        className={`max-w-7xl w-full mx-auto px-4 sm:px-6 flex-1 ${
+          forceLandscape ? 'pt-0 space-y-2' : 'pt-1 landscape:pt-0 space-y-4 landscape:space-y-2'
+        }`}
+      >
         {!isOnline && (
           <div className="rounded-xl bg-[var(--bg-elevated)] border border-white/10 px-4 py-2.5 flex items-center gap-2.5 text-xs text-[#D1D5DB]">
             <WifiOff className="w-4 h-4 shrink-0" />
@@ -666,13 +690,8 @@ export default function App() {
               forceLandscape={forceLandscape}
               dueMaintenance={dueMaintenance}
               onClickTelltale={() => setActiveTab('pulso')}
-              onStartGPS={drive.startGPS}
+              onStartGPS={handleStartDrive}
               onStopTracking={drive.stopTracking}
-              onResetPartial={() => setPartialKm(0)}
-              onResetMinMax={drive.resetMinMax}
-              onOpenEditTotal={() => setIsEditOdoOpen(true)}
-              onSetFuelFull={() => setFuelPct(100)}
-              onChangeFuelPct={setFuelPct}
             />
           </div>
 
@@ -735,7 +754,23 @@ export default function App() {
 
             <div className={activeTab === 'config' ? 'block' : 'hidden lg:block'}>
               <SettingsPanel
+                vehicle={vehicle}
+                totalKm={totalKm}
+                partialKm={partialKm}
+                fuelPct={fuelPct}
+                speedStats={drive.speedStats}
+                onResetPartial={() => setPartialKm(0)}
+                onResetMinMax={drive.resetMinMax}
+                onOpenEditTotal={() => setIsEditOdoOpen(true)}
+                onSetFuelFull={() => setFuelPct(100)}
+                onChangeFuelPct={setFuelPct}
                 forceLandscape={forceLandscape}
+                manualLandscape={manualLandscape}
+                autoTiltEnabled={autoTiltEnabled}
+                onToggleAutoTilt={() => {
+                  void requestSensorAccess();
+                  setAutoTiltEnabled((v) => !v);
+                }}
                 onToggleForceLandscape={toggleForceLandscape}
                 isBubbleActive={bubble.isBubbleActive}
                 bubbleError={bubble.bubbleError}
@@ -851,20 +886,6 @@ export default function App() {
           </span>
         </button>
       )}
-
-      {/* Quiet Footer */}
-      <footer className="max-w-7xl w-full mx-auto px-4 sm:px-6 pt-8 pb-2 text-center text-xs text-[var(--text-secondary)]">
-        <span>by AjrcServicios</span>
-        <span className="mx-2" aria-hidden="true">·</span>
-        <a
-          href="https://ajrcs.vercel.app"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-[#3B82F6] hover:underline"
-        >
-          ajrcs.vercel.app
-        </a>
-      </footer>
 
       <OdometerEditModal
         isOpen={isEditOdoOpen}

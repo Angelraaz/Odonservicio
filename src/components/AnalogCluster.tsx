@@ -1,11 +1,5 @@
 import React from 'react';
-import {
-  Fuel,
-  Navigation,
-  RotateCcw,
-  SlidersHorizontal,
-  Square,
-} from 'lucide-react';
+import { Fuel, Navigation, Square } from 'lucide-react';
 import type {
   DriveMode,
   MaintenanceItem,
@@ -30,11 +24,6 @@ interface AnalogClusterProps {
   onClickTelltale: () => void;
   onStartGPS: () => void;
   onStopTracking: () => void;
-  onResetPartial: () => void;
-  onResetMinMax: () => void;
-  onOpenEditTotal: () => void;
-  onSetFuelFull: () => void;
-  onChangeFuelPct: (pct: number) => void;
 }
 
 function formatEs(val: number, decimals: number): string {
@@ -77,11 +66,6 @@ export const AnalogCluster: React.FC<AnalogClusterProps> = ({
   onClickTelltale,
   onStartGPS,
   onStopTracking,
-  onResetPartial,
-  onResetMinMax,
-  onOpenEditTotal,
-  onSetFuelFull,
-  onChangeFuelPct,
 }) => {
   // 0 to 240 km/h sweep: -135 deg to +135 deg
   const clampedSpeed = Math.min(240, Math.max(0, speedStats.currentKmh));
@@ -119,16 +103,16 @@ export const AnalogCluster: React.FC<AnalogClusterProps> = ({
       <div
         className={
           forceLandscape
-            ? 'grid grid-cols-12 gap-4 items-center'
-            : 'grid grid-cols-1 landscape:grid-cols-12 lg:landscape:grid-cols-1 gap-5 landscape:gap-4 items-center'
+            ? 'grid grid-cols-12 gap-3 items-start'
+            : 'grid grid-cols-1 landscape:grid-cols-12 lg:landscape:grid-cols-1 gap-4 landscape:gap-3 items-start'
         }
       >
-        {/* Dial Column */}
+        {/* Dial Column — anchored cleanly at the top in landscape */}
         <div
           className={
             forceLandscape
-              ? 'col-span-5 flex flex-col items-center justify-center pt-1'
-              : 'landscape:col-span-5 lg:landscape:col-span-1 flex flex-col items-center justify-center pt-1'
+              ? 'col-span-5 flex flex-col items-center justify-start'
+              : 'landscape:col-span-5 lg:landscape:col-span-1 flex flex-col items-center justify-start'
           }
         >
           <div
@@ -250,17 +234,17 @@ export const AnalogCluster: React.FC<AnalogClusterProps> = ({
 
               <text
                 x="140"
-                y="194"
+                y="176"
                 textAnchor="middle"
                 fill={dialText}
-                fontSize="13"
+                fontSize="11.5"
                 fontWeight="500"
                 fontFamily="Plus Jakarta Sans, sans-serif"
               >
                 km/h
               </text>
 
-              {/* Bold Red Analog Needle (sweeps over center window) */}
+              {/* Bold Red Analog Needle */}
               <g
                 transform={`rotate(${speedAngle} 140 140)`}
                 style={{ transition: 'transform 160ms ease-out' }}
@@ -270,14 +254,14 @@ export const AnalogCluster: React.FC<AnalogClusterProps> = ({
               </g>
             </svg>
 
-            {/* Automotive Telltale Warning Lamps inside the bottom arc of the dial */}
+            {/* Automotive Telltale Warning Lamps inside the dial */}
             {dueMaintenance.length > 0 && (
               <button
                 type="button"
                 onClick={onClickTelltale}
                 title="Testigo encendido: toca para ver en Pulso Mecánico"
                 aria-label="Testigos de mantenimiento encendidos en el tablero"
-                className="absolute bottom-[7%] left-1/2 -translate-x-1/2 flex items-center justify-center gap-2 px-2.5 py-1 rounded-xl bg-black/80 border border-white/10 hover:border-amber-400/50 cursor-pointer"
+                className="absolute bottom-[22%] left-1/2 -translate-x-1/2 flex items-center justify-center gap-1.5 px-2 py-0.5 rounded-lg bg-black/80 border border-white/10 hover:border-amber-400/50 cursor-pointer"
               >
                 {dueMaintenance.slice(0, 4).map((item) => {
                   const isOverdue =
@@ -290,8 +274,8 @@ export const AnalogCluster: React.FC<AnalogClusterProps> = ({
                         isOverdue ? 'text-red-500 animate-pulse' : 'text-amber-400'
                       }`}
                     >
-                      <TelltaleIcon kind={item.kind} className="w-5 h-5" />
-                      <span className="text-[8px] font-semibold leading-none tracking-tight">
+                      <TelltaleIcon kind={item.kind} className="w-4 h-4" />
+                      <span className="text-[7px] font-semibold leading-none tracking-tight">
                         {shortTelltaleLabel(item.kind, item.title)}
                       </span>
                     </span>
@@ -299,6 +283,33 @@ export const AnalogCluster: React.FC<AnalogClusterProps> = ({
                 })}
               </button>
             )}
+
+            {/* Compact Iniciar / Detener GPS Button nested inside the bottom arc of the analog dial */}
+            <div
+              className={`absolute left-1/2 -translate-x-1/2 ${
+                dueMaintenance.length > 0 ? 'bottom-[5.5%]' : 'bottom-[10%]'
+              }`}
+            >
+              {mode === 'idle' ? (
+                <button
+                  type="button"
+                  onClick={onStartGPS}
+                  className="h-7 sm:h-8 landscape:h-7 px-3.5 rounded-full bg-blue-600/95 hover:bg-blue-500 border border-blue-400/40 text-white text-[11px] font-semibold tracking-wide flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shadow-md transition-all active:scale-95"
+                >
+                  <Navigation className="w-3 h-3" />
+                  <span>Iniciar</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onStopTracking}
+                  className="h-7 sm:h-8 landscape:h-7 px-3.5 rounded-full bg-[#12151C]/95 hover:bg-red-500/25 border border-red-500/40 text-red-200 text-[11px] font-semibold flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shadow-md transition-all active:scale-95"
+                >
+                  <Square className="w-2.5 h-2.5 fill-red-400 text-red-400" />
+                  <span>Detener</span>
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="text-xs text-[var(--text-secondary)] -mt-1 flex items-center gap-2">
@@ -306,7 +317,7 @@ export const AnalogCluster: React.FC<AnalogClusterProps> = ({
             {mode === 'gps' ? (
               <span className="flex items-center gap-1.5 text-emerald-400">
                 <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                GPS Activo · {formatEs(speedStats.currentKmh, 1)} km/h
+                {formatEs(speedStats.currentKmh, 1)} km/h
               </span>
             ) : (
               <span>
@@ -317,16 +328,16 @@ export const AnalogCluster: React.FC<AnalogClusterProps> = ({
           </div>
         </div>
 
-        {/* Right Column in Landscape / Below Dial in Portrait */}
+        {/* Right Column in Landscape / Below Dial in Portrait: Pure Readouts + Fuel + Sleek Iniciar Button */}
         <div
           className={
             forceLandscape
-              ? 'col-span-7 space-y-3'
-              : 'landscape:col-span-7 lg:landscape:col-span-1 space-y-4'
+              ? 'col-span-7 space-y-3 pt-1'
+              : 'landscape:col-span-7 lg:landscape:col-span-1 space-y-4 landscape:space-y-3 landscape:pt-1 lg:landscape:pt-0'
           }
         >
-          {/* 2x2 Readout Grid */}
-          <div className="grid grid-cols-2 gap-y-4 gap-x-4 max-w-md mx-auto text-center">
+          {/* Clean 2x2 Readout Grid (only numbers, calibration moved to Configuración) */}
+          <div className="grid grid-cols-2 gap-y-3 gap-x-4 max-w-md mx-auto text-center">
             <div className="space-y-0.5">
               <div className="text-xs sm:text-sm text-[var(--text-secondary)]">Velocidad mínima</div>
               <div className="font-mono-tabular text-2xl sm:text-3xl landscape:text-xl lg:landscape:text-3xl font-bold text-[var(--text-primary)]">
@@ -341,68 +352,29 @@ export const AnalogCluster: React.FC<AnalogClusterProps> = ({
                 {formatEs(speedStats.maxKmh, 1)}
                 <span className="text-sm font-normal text-[var(--text-secondary)] ml-1">km/h</span>
               </div>
-              {(speedStats.maxKmh > 0 || speedStats.minMovingKmh !== null) && (
-                <button
-                  type="button"
-                  onClick={onResetMinMax}
-                  className="text-[11px] text-[var(--text-secondary)] hover:text-white underline cursor-pointer"
-                >
-                  Reiniciar máx/mín
-                </button>
-              )}
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               <div className="text-xs sm:text-sm text-[var(--text-secondary)]">Odómetro parcial</div>
               <div className="font-mono-tabular text-2xl sm:text-3xl landscape:text-xl lg:landscape:text-3xl font-bold text-[var(--text-primary)]">
                 {formatEs(partialKm, 2)}
                 <span className="text-sm font-normal text-[var(--text-secondary)] ml-1">km</span>
               </div>
-              <button
-                type="button"
-                onClick={onResetPartial}
-                className="inline-flex items-center gap-1 min-h-[36px] px-3 rounded-lg bg-[var(--bg-elevated)] hover:bg-[#1B1F27] border border-white/10 text-xs text-[#D1D5DB] cursor-pointer"
-              >
-                <RotateCcw className="w-3 h-3" />
-                Poner a cero
-              </button>
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               <div className="text-xs sm:text-sm text-[var(--text-secondary)]">Odómetro total</div>
               <div className="font-mono-tabular text-2xl sm:text-3xl landscape:text-xl lg:landscape:text-3xl font-bold text-[var(--text-primary)]">
                 {formatEs(totalKm, 1)}
                 <span className="text-sm font-normal text-[var(--text-secondary)] ml-1">km</span>
               </div>
-              <button
-                type="button"
-                onClick={onOpenEditTotal}
-                className="inline-flex items-center gap-1 min-h-[36px] px-3 rounded-lg bg-[var(--bg-elevated)] hover:bg-[#1B1F27] border border-white/10 text-xs text-[#D1D5DB] cursor-pointer"
-              >
-                <SlidersHorizontal className="w-3 h-3" />
-                Modificar total
-              </button>
             </div>
           </div>
 
-          {/* Analog Fuel Gauge + FULL Control */}
-          <div className="max-w-md mx-auto rounded-2xl bg-[var(--bg-card)] border border-white/[0.08] p-3.5 sm:p-4 space-y-2.5 transition-colors duration-300">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Fuel className={`w-4 h-4 ${isLowFuel ? 'text-red-500' : 'text-[var(--text-primary)]'}`} />
-                <span className="text-xs font-semibold text-[var(--text-primary)]">Combustible</span>
-              </div>
-              <span
-                className={`font-mono-tabular text-xs font-semibold ${
-                  isLowFuel ? 'text-red-400' : 'text-[var(--text-secondary)]'
-                }`}
-              >
-                {Math.round(clampedFuel)}% · {litersRemaining} L
-              </span>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <svg viewBox="0 0 160 95" className="w-32 h-18 shrink-0">
+          {/* Pure Analog Fuel Display (FULL button & slider moved to Configuración) */}
+          <div className="max-w-md mx-auto rounded-2xl bg-[var(--bg-card)] border border-white/[0.08] px-4 py-3 transition-colors duration-300">
+            <div className="flex items-center justify-between gap-4">
+              <svg viewBox="0 0 160 95" className="w-28 h-16 shrink-0">
                 <path
                   d="M 20 80 A 60 60 0 0 1 140 80"
                   fill="none"
@@ -436,75 +408,41 @@ export const AnalogCluster: React.FC<AnalogClusterProps> = ({
                 </g>
               </svg>
 
-              <div className="flex-1 space-y-2">
-                <button
-                  type="button"
-                  onClick={onSetFuelFull}
-                  className={`w-full min-h-[40px] rounded-xl text-xs font-bold cursor-pointer transition-colors ${
-                    isNightMode
-                      ? 'bg-[#D1D5DB] text-[#050505] hover:bg-white'
-                      : 'bg-white text-[#000000] hover:bg-gray-200'
+              <div className="flex-1 text-right space-y-1">
+                <div className="flex items-center justify-end gap-1.5">
+                  <Fuel className={`w-4 h-4 ${isLowFuel ? 'text-red-500' : 'text-[var(--text-primary)]'}`} />
+                  <span className="text-xs font-semibold text-[var(--text-primary)]">Combustible</span>
+                </div>
+                <div
+                  className={`font-mono-tabular text-lg font-bold ${
+                    isLowFuel ? 'text-red-400' : 'text-[var(--text-primary)]'
                   }`}
                 >
-                  Tanque FULL (100%)
-                </button>
-                <input
-                  type="range"
-                  aria-label="Nivel manual de combustible"
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={Math.round(clampedFuel)}
-                  onChange={(e) => onChangeFuelPct(Number(e.target.value))}
-                  className="w-full accent-red-500 cursor-pointer h-5"
-                />
+                  {Math.round(clampedFuel)}% · {litersRemaining} L
+                </div>
+                <div
+                  className={`text-[11px] font-mono-tabular ${
+                    isLowFuel ? 'text-red-400 font-medium' : 'text-[var(--text-secondary)]'
+                  }`}
+                >
+                  {isLowFuel
+                    ? 'Reserva baja · Llena en Configuración'
+                    : `${vehicle.kmPerLiter} km/L · ~${Math.round(
+                        (clampedFuel / 100) * vehicle.tankCapacityLiters * vehicle.kmPerLiter
+                      )} km rest.`}
+                </div>
               </div>
             </div>
-
-            {isLowFuel ? (
-              <div className="text-xs font-medium text-red-400">
-                Reserva baja · Toca llenar gasolina
-              </div>
-            ) : (
-              <div className="text-[11px] font-mono-tabular text-[var(--text-secondary)]">
-                Baja al rodar · {vehicle.kmPerLiter} km/L · ~{Math.round(vehicle.tankCapacityLiters * vehicle.kmPerLiter)} km/tanque
-              </div>
-            )}
           </div>
 
-          {/* Real GPS Controls */}
-          <div className="max-w-md mx-auto space-y-2.5">
-            <div className="flex items-center gap-2.5">
-              {mode === 'idle' ? (
-                <button
-                  type="button"
-                  onClick={onStartGPS}
-                  className="flex-1 min-h-[46px] px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
-                >
-                  <Navigation className="w-4 h-4" />
-                  Activar GPS
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={onStopTracking}
-                  className="flex-1 min-h-[46px] px-4 rounded-xl bg-[var(--bg-elevated)] hover:bg-red-500/20 border border-white/15 hover:border-red-500/40 text-white text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
-                >
-                  <Square className="w-3.5 h-3.5" />
-                  Detener GPS
-                </button>
-              )}
+          {gpsError && (
+            <div
+              role="alert"
+              className="max-w-md mx-auto rounded-xl bg-red-500/10 border border-red-500/25 px-3.5 py-2 text-xs text-red-300 text-center"
+            >
+              {gpsError}
             </div>
-
-            {gpsError && (
-              <div
-                role="alert"
-                className="rounded-xl bg-red-500/10 border border-red-500/25 px-3.5 py-2.5 text-xs text-red-300"
-              >
-                {gpsError}
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </div>
     </section>
